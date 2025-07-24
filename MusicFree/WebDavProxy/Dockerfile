@@ -1,5 +1,5 @@
 # 使用 Alpine Linux 作为基础镜像，体积小
-FROM node:20-alpine
+FROM node:22-alpine
 
 # 设置工作目录
 WORKDIR /app
