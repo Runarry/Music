@@ -1,0 +1,25 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Development
+*.log
+node_modules/
+npm-debug.log*
+
+# Cloudflare Worker files (not needed for Node.js version)
+cloudflare_worker.js
+webdav.js
+
+# OS files
+.DS_Store
+Thumbs.db
