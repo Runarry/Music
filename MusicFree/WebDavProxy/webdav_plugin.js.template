@@ -1,11 +1,13 @@
 const UPDATE_URL = "{{UPDATE_URL}}";
+const crypto = require("crypto");
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const webdav = require("webdav");
+const webdav_1 = require("webdav");
 let cachedData = {};
 function getClient() {
-    const { url, username, password, searchPath } = env?.getUserVariables?.() ?? {};
+    var _a, _b, _c;
+    const { url, username, password, searchPath } = (_b = (_a = env === null || env === void 0 ? void 0 : env.getUserVariables) === null || _a === void 0 ? void 0 : _a.call(env)) !== null && _b !== void 0 ? _b : {};
     if (!(url && username && password)) {
         return null;
     }
@@ -17,19 +19,20 @@ function getClient() {
         cachedData.username = username;
         cachedData.password = password;
         cachedData.searchPath = searchPath;
-        cachedData.searchPathList = searchPath?.split?.(",");
+        cachedData.searchPathList = (_c = searchPath === null || searchPath === void 0 ? void 0 : searchPath.split) === null || _c === void 0 ? void 0 : _c.call(searchPath, ",");
         cachedData.cacheFileList = null;
     }
-    return webdav.createClient(url, {
-        authType: webdav.AuthType.Password,
+    return (0, webdav_1.createClient)(url, {
+        authType: webdav_1.AuthType.Password,
         username,
         password,
     });
 }
 async function searchMusic(query) {
+    var _a, _b;
     const client = getClient();
     if (!cachedData.cacheFileList) {
-        const searchPathList = cachedData.searchPathList?.length
+        const searchPathList = ((_a = cachedData.searchPathList) === null || _a === void 0 ? void 0 : _a.length)
             ? cachedData.searchPathList
             : ["/"];
         let result = [];
@@ -37,13 +40,14 @@ async function searchMusic(query) {
             try {
                 const fileItems = (await client.getDirectoryContents(search)).filter((it) => it.type === "file" && it.mime.startsWith("audio"));
                 result = [...result, ...fileItems];
-            } catch {}
+            }
+            catch (_c) { }
         }
         cachedData.cacheFileList = result;
     }
     return {
         isEnd: true,
-        data: (cachedData.cacheFileList ?? [])
+        data: ((_b = cachedData.cacheFileList) !== null && _b !== void 0 ? _b : [])
             .filter((it) => it.basename.includes(query))
             .map((it) => ({
                 title: it.basename,
@@ -76,8 +80,28 @@ async function getTopListDetail(topListItem) {
         })),
     };
 }
+const ALGORITHM = 'aes-256-cbc';
+
+// 加密函数
+function encryptData(data, secretKey) {
+    if (!secretKey) {
+        return null;
+    }
+    try {
+        const key = crypto.createHash('sha256').update(secretKey).digest();
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+        let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        return iv.toString('hex') + ':' + encrypted;
+    } catch (error) {
+        console.error('加密失败:', error);
+        return null;
+    }
+}
+
 module.exports = {
-    platform: "WebDAV",
+    platform: "WebDAVProxy",
     author: "{{AUTHOR}}",
     description: "使用此插件前先配置用户变量",
     userVariables: [
@@ -99,8 +123,13 @@ module.exports = {
             name: "存放歌曲的路径",
         },
         {
-            key: "proxyUrl", 
+            key: "proxyUrl",
             name: "代理链接"
+        },
+        {
+            key: "encryptionKey",
+            name: "加密密钥（可选）",
+            type: "password"
         }
     ],
     version: "{{VERSION}}",
@@ -114,15 +143,46 @@ module.exports = {
     },
     getTopLists,
     getTopListDetail,
+    // 这里只做了改动
     getMediaSource(musicItem) {
         const client = getClient();
         const rawUrl = client.getFileDownloadLink(musicItem.id);
-        const { proxyUrl: workerProxy } = env?.getUserVariables?.() ?? {};
+        // 从用户变量获取代理地址和加密密钥
+        const { proxyUrl: workerProxy, encryptionKey } = env?.getUserVariables?.() ?? {};
         if (!workerProxy) {
             return {
                 url: rawUrl,
             };
         }
+
+        // 解析原始URL以提取鉴权信息
+        const urlObj = new URL(rawUrl);
+
+        // 如果提供了加密密钥，则使用加密方式
+        if (encryptionKey) {
+            const authData = {
+                username: urlObj.username || '',
+                password: urlObj.password || ''
+            };
+
+            // 清除URL中的鉴权信息
+            urlObj.username = '';
+            urlObj.password = '';
+            const cleanUrl = urlObj.toString();
+
+            // 加密鉴权信息
+            const encryptedAuth = encryptData(authData, encryptionKey);
+
+            if (encryptedAuth) {
+                // 构建带有加密鉴权信息的代理URL
+                const proxyUrl = `${workerProxy}/?url=${encodeURIComponent(cleanUrl)}&auth=${encodeURIComponent(encryptedAuth)}`;
+                return {
+                    url: proxyUrl,
+                };
+            }
+        }
+
+        // 如果没有加密密钥或加密失败，使用原始URL方式
         const proxyUrl = `${workerProxy}/?url=${encodeURIComponent(rawUrl)}`;
         return {
             url: proxyUrl,
