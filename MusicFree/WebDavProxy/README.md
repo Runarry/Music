@@ -6,4 +6,30 @@
 - nodejs_proxy.js 通用的nodejs代理脚本。
 
 ---
-**重要提示**：脚本中WebDAV鉴权信息为明文传输，没有加密，而我个人WebDAV设置了只读权限，懒得加。
+**重要提示**：
+- 脚本支持加密传输鉴权信息（可选）
+- 如果不设置加密密钥，将使用明文传输（兼容旧版本）
+- 建议为安全起见，设置加密密钥或确保WebDAV只有只读权限
+
+### 加密功能说明
+
+#### WebDAV插件配置
+在MusicFree的WebDAV插件设置中，新增了"加密密钥"字段：
+- 如果设置了加密密钥，鉴权信息将使用AES-256-CBC加密后传输
+- 如果不设置（留空），将使用原始的明文传输方式
+
+#### 代理服务器配置
+使用Docker部署时，需要在docker-compose.yml中设置相同的加密密钥：
+
+```yaml
+environment:
+  - PORT=3000
+  - ENCRYPTION_KEY=your-secret-key-here  # 必须与插件中的加密密钥一致
+```
+
+或者直接运行Node.js脚本时：
+```bash
+ENCRYPTION_KEY=your-secret-key-here node nodejs_proxy.js
+```
+
+**注意**：代理服务器和WebDAV插件必须使用相同的加密密钥，否则无法正确解密鉴权信息。

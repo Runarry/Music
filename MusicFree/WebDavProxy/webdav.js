@@ -1,4 +1,5 @@
 const UPDATE_URL = "";
+const crypto = require("crypto");
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -79,6 +80,26 @@ async function getTopListDetail(topListItem) {
         })),
     };
 }
+const ALGORITHM = 'aes-256-cbc';
+
+// 加密函数
+function encryptData(data, secretKey) {
+    if (!secretKey) {
+        return null;
+    }
+    try {
+        const key = crypto.createHash('sha256').update(secretKey).digest();
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+        let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        return iv.toString('hex') + ':' + encrypted;
+    } catch (error) {
+        console.error('加密失败:', error);
+        return null;
+    }
+}
+
 module.exports = {
     platform: "WebDAVProxy",
     author: "Runarry",
@@ -104,6 +125,11 @@ module.exports = {
         {
             key: "proxyUrl",
             name: "代理链接"
+        },
+        {
+            key: "encryptionKey",
+            name: "加密密钥（可选）",
+            type: "password"
         }
     ],
     version: "0.1.0",
@@ -121,13 +147,42 @@ module.exports = {
     getMediaSource(musicItem) {
         const client = getClient();
         const rawUrl = client.getFileDownloadLink(musicItem.id);
-        // 从用户变量获取代理地址
-        const { proxyUrl: workerProxy } = env?.getUserVariables?.() ?? {};
+        // 从用户变量获取代理地址和加密密钥
+        const { proxyUrl: workerProxy, encryptionKey } = env?.getUserVariables?.() ?? {};
         if (!workerProxy) {
             return {
                 url: rawUrl,
             };
         }
+        
+        // 解析原始URL以提取鉴权信息
+        const urlObj = new URL(rawUrl);
+        
+        // 如果提供了加密密钥，则使用加密方式
+        if (encryptionKey) {
+            const authData = {
+                username: urlObj.username || '',
+                password: urlObj.password || ''
+            };
+            
+            // 清除URL中的鉴权信息
+            urlObj.username = '';
+            urlObj.password = '';
+            const cleanUrl = urlObj.toString();
+            
+            // 加密鉴权信息
+            const encryptedAuth = encryptData(authData, encryptionKey);
+            
+            if (encryptedAuth) {
+                // 构建带有加密鉴权信息的代理URL
+                const proxyUrl = `${workerProxy}/?url=${encodeURIComponent(cleanUrl)}&auth=${encodeURIComponent(encryptedAuth)}`;
+                return {
+                    url: proxyUrl,
+                };
+            }
+        }
+        
+        // 如果没有加密密钥或加密失败，使用原始URL方式
         const proxyUrl = `${workerProxy}/?url=${encodeURIComponent(rawUrl)}`;
         return {
             url: proxyUrl,

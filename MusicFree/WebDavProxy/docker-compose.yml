@@ -8,6 +8,8 @@ services:
       - "8320:3000"  # 主机端口:容器端口
     environment:
       - PORT=3000
+      # 加密密钥（可选）- 如果设置，必须与webdav.js中的encryptionKey一致
+      # - ENCRYPTION_KEY=your-secret-key-here
     # 资源限制
     deploy:
       resources:

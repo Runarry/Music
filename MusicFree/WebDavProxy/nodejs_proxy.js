@@ -6,8 +6,32 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
+
+// 从环境变量获取加密密钥（可选）
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
+const ALGORITHM = 'aes-256-cbc';
+
+// 解密函数
+function decryptData(encryptedData, secretKey) {
+    if (!secretKey || !encryptedData) {
+        return null;
+    }
+    try {
+        const key = crypto.createHash('sha256').update(secretKey).digest();
+        const [ivHex, encrypted] = encryptedData.split(':');
+        const iv = Buffer.from(ivHex, 'hex');
+        const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return JSON.parse(decrypted);
+    } catch (error) {
+        console.error('解密失败:', error);
+        return null;
+    }
+}
 
 /**
  * 处理代理请求
@@ -52,8 +76,17 @@ async function handleRequest(req, res) {
         }
     }
 
-    // 处理 Basic Auth
-    if (upstreamUrl.username && upstreamUrl.password) {
+    // 处理加密的鉴权信息
+    const encryptedAuth = requestUrl.searchParams.get('auth');
+    if (encryptedAuth && ENCRYPTION_KEY) {
+        // 如果有加密的auth参数且配置了密钥，尝试解密
+        const authData = decryptData(decodeURIComponent(encryptedAuth), ENCRYPTION_KEY);
+        if (authData && authData.username && authData.password) {
+            const basic = Buffer.from(`${authData.username}:${authData.password}`).toString('base64');
+            headers['Authorization'] = `Basic ${basic}`;
+        }
+    } else if (upstreamUrl.username && upstreamUrl.password) {
+        // 使用URL中的鉴权信息（未加密方式）
         const basic = Buffer.from(`${upstreamUrl.username}:${upstreamUrl.password}`).toString('base64');
         headers['Authorization'] = `Basic ${basic}`;
         // 清除 URL 中的用户名密码
@@ -128,6 +161,11 @@ const server = http.createServer(handleRequest);
 server.listen(PORT, () => {
     console.log(`代理服务器运行在端口 ${PORT}`);
     console.log(`使用方式: http://localhost:${PORT}/?url=<目标URL>`);
+    if (ENCRYPTION_KEY) {
+        console.log(`已启用加密模式`);
+    } else {
+        console.log(`未配置加密密钥，使用明文传输模式`);
+    }
 });
 
 // 优雅关闭
