@@ -23,3 +23,5 @@ webdav.js
 # OS files
 .DS_Store
 Thumbs.db
+
+webdav_plugin.js.template

@@ -1,21 +1,20 @@
-
 services:
   nodejs-proxy:
     build: .
     container_name: webdav-proxy
     restart: unless-stopped
     ports:
-      - "8320:3000"  # 主机端口:容器端口
+      - "8320:3000" # 主机端口:容器端口
     environment:
       - PORT=3000
       # 加密密钥（可选）- 如果设置，必须与webdav.js中的encryptionKey一致
-      # - ENCRYPTION_KEY=your-secret-key-here
+      - ENCRYPTION_KEY=Cj9kZ2V4cGFuZGVkS2V5
     # 资源限制
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 128M
         reservations:
-          cpus: '0.1'
+          cpus: "0.1"
           memory: 64M
